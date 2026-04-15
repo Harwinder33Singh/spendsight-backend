@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if command -v gitleaks >/dev/null 2>&1; then
+  echo "Running gitleaks staged scan..."
+  gitleaks protect --staged --redact
+  exit 0
+fi
+
+echo "gitleaks is not installed. Blocking commit to avoid secret exposure."
+echo "Install it with: brew install gitleaks"
+exit 1
