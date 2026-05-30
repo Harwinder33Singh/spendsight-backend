@@ -1,34 +1,48 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-// Setup type definitions for built-in Supabase Runtime APIs
 const PLAID_CLIENT_ID = Deno.env.get("PLAID_CLIENT_ID")!
-const PLAID_SECRET = Deno.env.get("PLAID_SECRET")!
-const PLAID_ENV = Deno.env.get("PLAID_ENV") ?? "sandbox"
+const PLAID_SECRET    = Deno.env.get("PLAID_SECRET")!
+const PLAID_ENV       = Deno.env.get("PLAID_ENV") ?? "sandbox"
+const SUPABASE_URL    = Deno.env.get("SUPABASE_URL")!
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 
 const plaidBaseUrl = `https://${PLAID_ENV}.plaid.com`
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type",
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, content-type",
-      },
-    })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const { user_id } = await req.json()
-
-    if (!user_id) {
+    // ── Verify the caller is an authenticated Supabase user ──────────────────
+    const authHeader = req.headers.get("Authorization")
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: "user_id is required" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Missing authorization header" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
       )
     }
 
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    const { data: { user }, error: authError } = await supabase.auth.getUser(
+      authHeader.replace("Bearer ", "")
+    )
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    const user_id = user.id  // verified — cannot be spoofed by the client
+
+    // ── Create Plaid link token ───────────────────────────────────────────────
     const response = await fetch(`${plaidBaseUrl}/link/token/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -64,15 +78,3 @@ Deno.serve(async (req) => {
     )
   }
 })
-
-/* To invoke locally:
-
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/plaid-create-link-token' \
-    --header 'Authorization: Bearer <SUPABASE_ANON_JWT>' \
-    --header 'Content-Type: application/json' \
-    --data '{"name":"Functions"}'
-
-*/
