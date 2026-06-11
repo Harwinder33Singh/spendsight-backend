@@ -430,6 +430,11 @@ verify_jwt = true
 import_map = "./functions/plaid-exchange-token/deno.json"
 entrypoint = "./functions/plaid-exchange-token/index.ts"
 
+[functions.ai-advisor]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/ai-advisor/index.ts"
+
 # RevenueCat sends a plain secret string, not a JWT — disable gateway JWT check
 # and let the function verify the secret itself
 [functions.revenuecat-webhook]
